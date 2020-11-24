@@ -1,0 +1,6 @@
+.*.swp
+/bin/
+*.exe
+esexample
+esexample.exe
+/.vscode/
