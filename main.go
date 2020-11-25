@@ -24,7 +24,7 @@ func main() {
 
 	cmdhandler := patient.NewPatientCommandHandler(patient.NewPatientEventStore(store))
 
-	admitPatient(*cmdhandler, guid1.String(), "John Doe", 33, "AA")
+	admitPatient(*cmdhandler, guid1.String(), "John Doe", 34, "AA")
 	transferPatient(*cmdhandler, guid1.String(), "BB")
 	transferPatient(*cmdhandler, guid1.String(), "CC")
 
@@ -32,11 +32,11 @@ func main() {
 
 	guid2 := uuid.New()
 
-	admitPatient(*cmdhandler, guid2.String(), "Pingo Pallino", 22, "AA")
+	admitPatient(*cmdhandler, guid2.String(), "Jane Doe", 29, "AA")
 
 	guid3 := uuid.New()
 
-	admitPatient(*cmdhandler, guid3.String(), "Pingo Pallino", 33, "BB")
+	admitPatient(*cmdhandler, guid3.String(), "Johnny Doe", 12, "BB")
 
 	calcNumberOfPatients(store)
 
@@ -48,7 +48,7 @@ func main() {
 
 	calcNumberOfPatients(store)
 
-	// VERIFY OPTIMISTICK LOCK ENFORNCEMENT
+	// VERIFY OPTIMISTICK LOCKING ENFORCEMENT
 	showPatient(guid1.String(), store)
 
 	evt, _ := store.Find(guid1.String(), patient.PatientEventFromType)
