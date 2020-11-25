@@ -59,6 +59,10 @@ func (es *CassandraEventStore) Find(guid string, mapper EventTypeToEventMapper) 
 }
 
 func (es *CassandraEventStore) Update(guid string, expectedVersion int, events []Event, mapper EventToEventTypeMapper) error {
+	return es.updateNoCAS(guid, expectedVersion, events, mapper)
+}
+
+func (es *CassandraEventStore) updateCAS(guid string, expectedVersion int, events []Event, mapper EventToEventTypeMapper) error {
 	batch := es.session.NewBatch(gocql.UnloggedBatch)
 	quorum := es.writeQuorum
 	numbEvents := len(events)
@@ -101,6 +105,62 @@ func (es *CassandraEventStore) Update(guid string, expectedVersion int, events [
 	}
 
 	if !applied {
+		return fmt.Errorf("%+v", "optimistic locking failed")
+	}
+
+	return nil
+}
+
+func (es *CassandraEventStore) updateNoCAS(guid string, expectedVersion int, events []Event, mapper EventToEventTypeMapper) error {
+	batch := es.session.NewBatch(gocql.UnloggedBatch)
+	quorum := es.writeQuorum
+	numbEvents := len(events)
+	newVersion := expectedVersion + numbEvents
+	marker := gocql.TimeUUID()
+	finalVersion := 0
+
+	batch.SetConsistency(quorum)
+	if expectedVersion == 0 {
+		batch.Query("INSERT INTO events (id, current_version) VALUES (?,?) IF NOT EXISTS", guid, numbEvents)
+	} else {
+		batch.Query("UPDATE events SET current_version = ? WHERE id = ? IF current_version = ?", newVersion, guid, expectedVersion)
+	}
+
+	stmt := "INSERT INTO events (id, version, type, payload, marker, savetime) VALUES (?,?,?,?,?,toTimeStamp(now()))"
+
+	for i, event := range events {
+		etype, err := mapper(event)
+
+		// error, uknown event type
+		if err != nil {
+			return err
+		}
+
+		jevent, err := json.Marshal(event)
+
+		// error, unable to marshal json
+		if err != nil {
+			return fmt.Errorf("CQL ERROR: %+v", err)
+		}
+
+		finalVersion = expectedVersion + 1 + i
+		batch.Query(stmt, guid, finalVersion, etype, jevent, marker)
+	}
+
+	// here we can get an error only if we are unable to run the query or it is invalid
+	err := es.session.ExecuteBatch(batch)
+
+	if err != nil {
+		return fmt.Errorf("CQL ERROR: %+v", err)
+	}
+
+	// check whether marker for the latest event we think we have written
+	var checkMarker gocql.UUID
+	if err := es.session.Query("SELECT marker FROM events WHERE id = ? AND version = ?", guid, finalVersion).Consistency(quorum).Scan(&checkMarker); err != nil {
+		return fmt.Errorf("ERROR: %+v", err)
+	}
+
+	if checkMarker != marker {
 		return fmt.Errorf("%+v", "optimistic locking failed")
 	}
 

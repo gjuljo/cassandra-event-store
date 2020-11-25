@@ -16,75 +16,39 @@ func main() {
 
 	// store := store.NewInMemStore()
 	store, _ := store.NewCassandraEventStore(&store.CassandraEventStoreConfig{
-		Hosts:    []string{"localhost"},
-		Keyspace: "eventstore",
+		Hosts:       []string{"localhost"},
+		Keyspace:    "eventstore",
+		WriteQuorum: "QUORUM",
+		ReadQuorum:  "LOCAL_QUORUM",
 	})
 
 	cmdhandler := patient.NewPatientCommandHandler(patient.NewPatientEventStore(store))
 
-	if err := cmdhandler.HandleAdmitPatient(&patient.AdmitPatient{
-		ID:   guid1.String(),
-		Name: "John Doe",
-		Age:  33,
-		Ward: "AA",
-	}); err != nil {
-		log.Printf("ERROR: %+v\n", err)
-	}
-
-	if err := cmdhandler.HandleTransferPatient(&patient.TransferPatient{
-		ID:            guid1.String(),
-		NewWardNumber: "BB",
-	}); err != nil {
-		log.Printf("ERROR: %+v\n", err)
-	}
-
-	if err := cmdhandler.HandleTransferPatient(&patient.TransferPatient{
-		ID:            guid1.String(),
-		NewWardNumber: "CC",
-	}); err != nil {
-		log.Printf("ERROR: %+v\n", err)
-	}
+	admitPatient(*cmdhandler, guid1.String(), "John Doe", 33, "AA")
+	transferPatient(*cmdhandler, guid1.String(), "BB")
+	transferPatient(*cmdhandler, guid1.String(), "CC")
 
 	showPatient(guid1.String(), store)
 
 	guid2 := uuid.New()
 
-	if err := cmdhandler.HandleAdmitPatient(&patient.AdmitPatient{
-		ID:   guid2.String(),
-		Name: "Pinco Pallino",
-		Age:  22,
-		Ward: "AA",
-	}); err != nil {
-		log.Printf("ERROR: %+v\n", err)
-	}
+	admitPatient(*cmdhandler, guid2.String(), "Pingo Pallino", 22, "AA")
 
 	guid3 := uuid.New()
 
-	if err := cmdhandler.HandleAdmitPatient(&patient.AdmitPatient{
-		ID:   guid3.String(),
-		Name: "Paolino Paperino",
-		Age:  33,
-		Ward: "BB",
-	}); err != nil {
-		log.Printf("ERROR: %+v\n", err)
-	}
+	admitPatient(*cmdhandler, guid3.String(), "Pingo Pallino", 33, "BB")
 
 	calcNumberOfPatients(store)
 
-	cmdhandler.HandleDischargePatient(&patient.DischargePatient{
-		ID: guid3.String(),
-	})
+	dischargePatient(*cmdhandler, guid3.String())
 
 	calcNumberOfPatients(store)
 
-	cmdhandler.HandleDischargePatient(&patient.DischargePatient{
-		ID: guid2.String(),
-	})
+	dischargePatient(*cmdhandler, guid2.String())
 
 	calcNumberOfPatients(store)
 
-	// GENERIAMO UN PROBLEMA DI CONCORRENZA
-
+	// VERIFY OPTIMISTICK LOCK ENFORNCEMENT
 	showPatient(guid1.String(), store)
 
 	evt, _ := store.Find(guid1.String(), patient.PatientEventFromType)
@@ -95,20 +59,42 @@ func main() {
 
 	showPatient(guid1.String(), store)
 
-	if err := cmdhandler.HandleTransferPatient(&patient.TransferPatient{
-		ID:            guid1.String(),
-		NewWardNumber: "DD",
-	}); err != nil {
-		log.Printf("ERROR: %+v\n", err)
-	}
+	transferPatient(*cmdhandler, guid1.String(), "DD")
 
 	showPatient(guid1.String(), store)
 
+	// try to store the user, expect an error
 	if err := store.Update(patient1.ID(), patient1.Version(), patient1.Events(), patient.PatientEventTypeFromEvent); err != nil {
 		log.Printf("ERROR, unable to update patient1: %+v", err)
 	}
 
 	showPatient(guid1.String(), store)
+}
+
+func admitPatient(cmdhandler patient.PatientCommandHandler, uuid string, name string, age int, ward string) {
+	if err := cmdhandler.HandleAdmitPatient(&patient.AdmitPatient{
+		ID:   uuid,
+		Name: patient.Name(name),
+		Age:  patient.Age(age),
+		Ward: patient.WardNumber(ward),
+	}); err != nil {
+		log.Printf("ERROR: %+v\n", err)
+	}
+}
+
+func transferPatient(cmdhandler patient.PatientCommandHandler, uuid string, ward string) {
+	if err := cmdhandler.HandleTransferPatient(&patient.TransferPatient{
+		ID:            uuid,
+		NewWardNumber: patient.WardNumber(ward),
+	}); err != nil {
+		log.Printf("ERROR: %+v\n", err)
+	}
+}
+
+func dischargePatient(cmdhandler patient.PatientCommandHandler, uuid string) {
+	cmdhandler.HandleDischargePatient(&patient.DischargePatient{
+		ID: uuid,
+	})
 }
 
 func showPatient(id string, store store.EventStore) {

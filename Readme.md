@@ -16,7 +16,7 @@ CREATE KEYSPACE eventstore WITH REPLICATION = {'class': 'SimpleStrategy', 'repli
 CREATE KEYSPACE eventstore WITH REPLICATION = {'class':'NetworkTopologyStrategy','DC1':3,'DC2':3,'DC3':3};
 ```
 
-### EVENT TABLE
+### EVENT TABLE (FOR LIGHTWEIGHT TRAMSACTIONS)
 ```
 CREATE TABLE IF NOT EXISTS eventstore.events (
   id           UUID,
@@ -36,7 +36,31 @@ CREATE MATERIALIZED VIEW eventstore.events_by_type AS
 PRIMARY KEY (type, savetime, version, id);
 ```
 
+### EVENT TABLE (NO LIGHTWEIGHT TRANSACTIONS)
+```
+CREATE TABLE IF NOT EXISTS eventstore.events (
+  id           UUID,
+  version      int,
+  type         int,
+  payload      text,
+  savetime     timestamp,
+  marker       timeuuid,
+  current_version  int STATIC,
+  PRIMARY KEY (id, version, savetime)
+);
+```
+
+### EVENT-BY-TYPE MATERIALIZED VIEW
+```
+CREATE MATERIALIZED VIEW eventstore.events_by_type AS
+  SELECT id, version, type, payload, savetime FROM eventstore.events WHERE type IS NOT NULL AND version IS NOT NULL AND savetime IS NOT NULL
+PRIMARY KEY (type, savetime, version, id);
+```
+
 # 2. CQL BATCH QUERIES
+
+### WITH LIGHTWEIGHT TRANSACTIONS
+
 ```
 BEGIN BATCH
 INSERT INTO eventstore.events (id, current_version) VALUES (fade87a1-9df9-46bb-aae6-63b2b763094d, 1) IF NOT EXISTS;
@@ -46,18 +70,16 @@ APPLY BATCH;
 
 ## *events*
 
-| `id (P)` | `version (C)` | `savetime (C)` | `current_version (S)` | `payload` | `type` |
+| id (P) | version (C) | savetime (C) | current_version (S) | payload | type |
 |----------|--------------:|----------------|----------------------:|----------:|-------:| 
-|`fade87a1-9df9-46bb-aae6-63b2b763094d` | `1` | `2020-11-24 18:21:49.826000+0000` | `1` | `'aaa'` | `11` |
+|fade87a1-9df9-46bb-aae6-63b2b763094d | 1 | 2020-11-24 18:21:49.826000+0000 | 1 | 'aaa' | 11 |
 
 
 ## *events_by_type*
 
-| `type (P)` | `savetype (C)` | `version (C)` | `id` | `payload` |
+| type (P) | savetype (C) | version (C) | id | payload |
 |------------|----------------|--------------:|------|----------:| 
-|`11`| `2020-11-24 18:21:49.826000+0000` | `1` | `fade87a1-9df9-46bb-aae6-63b2b763094d`|`'aaa'`|
-
-
+|11| 2020-11-24 18:21:49.826000+0000 | 1 | fade87a1-9df9-46bb-aae6-63b2b763094d|'aaa'|
 
 
 if expectedVersion > 0:
@@ -72,19 +94,67 @@ APPLY BATCH;
 
 ## *events*
 
-| `id (P)` | `version (C)` | `savetime (C)` | `current_version (S)` | `payload` | `type` |
+| id (P) | version (C) | savetime (C) | current_version (S) | payload | type |
 |----------|--------------:|----------------|----------------------:|----------:|-------:| 
-|`fade87a1-9df9-46bb-aae6-63b2b763094d` | `1` | `2020-11-24 18:21:49.826000+0000` | `3` | `'aaa'` | `11` |
-|`fade87a1-9df9-46bb-aae6-63b2b763094d` | `2` | `2020-11-24 18:21:49.827000+0000` | `3` | `'bbb'` | `22` |
-|`fade87a1-9df9-46bb-aae6-63b2b763094d` | `3` | `2020-11-24 18:21:49.828000+0000` | `3` | `'ccc'` | `33` |
+|fade87a1-9df9-46bb-aae6-63b2b763094d | 1 | 2020-11-24 18:21:49.826000+0000 | 3 | 'aaa' | 11 |
+|fade87a1-9df9-46bb-aae6-63b2b763094d | 2 | 2020-11-24 18:21:49.827000+0000 | 3 | 'bbb' | 22 |
+|fade87a1-9df9-46bb-aae6-63b2b763094d | 3 | 2020-11-24 18:21:49.828000+0000 | 3 | 'ccc' | 33 |
 
 ## *events_by_type*
 
-| `type (P)` | `savetype (C)` | `version (C)` | `id` | `payload` |
+| type (P) | savetype (C) | version (C) | id | payload |
 |------------|----------------|--------------:|------|----------:| 
-|`11`| `2020-11-24 18:21:49.826000+0000` | `1` | `fade87a1-9df9-46bb-aae6-63b2b763094d`|`'aaa'`|
-|`22`| `2020-11-24 18:21:49.827000+0000` | `2` | `fade87a1-9df9-46bb-aae6-63b2b763094d`|`'bbb'`|
-|`33`| `2020-11-24 18:21:49.828000+0000` | `3` | `fade87a1-9df9-46bb-aae6-63b2b763094d`|`'ccc'`|
+|11| 2020-11-24 18:21:49.826000+0000 | 1 | fade87a1-9df9-46bb-aae6-63b2b763094d|'aaa'|
+|22| 2020-11-24 18:21:49.827000+0000 | 2 | fade87a1-9df9-46bb-aae6-63b2b763094d|'bbb'|
+|33| 2020-11-24 18:21:49.828000+0000 | 3 | fade87a1-9df9-46bb-aae6-63b2b763094d|'ccc'|
+
+### WITHOUT LIGHTWEIGHT TRANSACTIONS
+
+```
+BEGIN BATCH
+INSERT INTO eventstore.events (id, current_version) VALUES (fade87a1-9df9-46bb-aae6-63b2b763094d, 1) IF NOT EXISTS;
+INSERT INTO eventstore.events (id, version, type, payload, marker, savetime) VALUES (fade87a1-9df9-46bb-aae6-63b2b763094d, 1, 11, 'aaa', 58f660ca-2f2d-11eb-a263-00155d875616, toTimeStamp(now()));
+APPLY BATCH;
+```
+
+## *events*
+
+| id (P) | version (C) | savetime (C) | current_version (S) | marker | payload | type |
+|--------|------------:|--------------|--------------------:|--------|--------:|-----:| 
+|fade87a1-9df9-46bb-aae6-63b2b763094d | 1 | 2020-11-24 18:21:49.826000+0000 | 1 | 58f660ca-2f2d-11eb-a263-00155d875616 | 'aaa' | 11 |
+
+## *events_by_type*
+
+| type (P) | savetype (C) | version (C) | id | payload |
+|------------|----------------|--------------:|------|----------:| 
+|11| 2020-11-24 18:21:49.826000+0000 | 1 | fade87a1-9df9-46bb-aae6-63b2b763094d|'aaa'|
+
+
+if expectedVersion > 0:
+
+```
+BEGIN BATCH
+UPDATE eventstore.events SET current_version = 3 WHERE id = fade87a1-9df9-46bb-aae6-63b2b763094d IF current_version = 1;
+INSERT INTO eventstore.events (id, version, type, payload, savetime) VALUES (fade87a1-9df9-46bb-aae6-63b2b763094d, 2, 22, 'bbb', 98ea964c-2f2d-11eb-b476-00155d875616, toTimeStamp(now()));
+INSERT INTO eventstore.events (id, version, type, payload, savetime) VALUES (fade87a1-9df9-46bb-aae6-63b2b763094d, 3, 33, 'ccc', 98ea964c-2f2d-11eb-b476-00155d875616, toTimeStamp(now()));
+APPLY BATCH;
+```
+
+## *events*
+
+| id (P) | version (C) | savetime (C) | current_version (S) | marker | payload | type |
+|--------|------------:|--------------|--------------------:|--------|--------:|-----:| 
+|fade87a1-9df9-46bb-aae6-63b2b763094d | 1 | 2020-11-24 18:21:49.826000+0000 | 3 | 98ea964c-2f2d-11eb-b476-00155d875616| 3 | 'aaa' | 11 |
+|fade87a1-9df9-46bb-aae6-63b2b763094d | 2 | 2020-11-24 18:21:49.827000+0000 | 3 | 98ea964c-2f2d-11eb-b476-00155d875616| 3 | 'bbb' | 22 |
+|fade87a1-9df9-46bb-aae6-63b2b763094d | 3 | 2020-11-24 18:21:49.828000+0000 | 3 | 98ea964c-2f2d-11eb-b476-00155d875616| 3 | 'ccc' | 33 |
+
+## *events_by_type*
+
+| type (P) | savetype (C) | version (C) | id | payload |
+|------------|----------------|--------------:|------|----------:| 
+|11| 2020-11-24 18:21:49.826000+0000 | 1 | fade87a1-9df9-46bb-aae6-63b2b763094d|'aaa'|
+|22| 2020-11-24 18:21:49.827000+0000 | 2 | fade87a1-9df9-46bb-aae6-63b2b763094d|'bbb'|
+|33| 2020-11-24 18:21:49.828000+0000 | 3 | fade87a1-9df9-46bb-aae6-63b2b763094d|'ccc'|
 
 
 
