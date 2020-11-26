@@ -62,7 +62,7 @@ This table is suitable to be used when, programmatically, you are using **lightw
 
 ### EVENT TABLE WITHOUT LIGHTWEIGHT TRANSACTIONS
 
-If we don't use the **ligthweight transactions**, we need to find an alternative way to realize whether an **optimistic locking** issue occurred as we don't get any direct feedback from the API about the actual batch execution. To do so we need to introduce an additional colum to the table, i.e. `marker`, just to let the code insert a sort of unique identifier for that batch execution and, later, verify with an subsequent query whether the our last event has been actually written with that marker. 
+If we don't use the **lightweight transactions**, we need to find an alternative way to realize whether an **optimistic locking** issue occurred as we don't get any direct feedback from the API about the actual batch execution. To do so we need to introduce an additional colum to the table, i.e. `marker`, just to let the code insert a sort of unique identifier for that batch execution and, later, verify with an subsequent query whether the our last event has been actually written with that marker. 
 
 You can see how this actually works in the later examples.
 
@@ -170,7 +170,7 @@ The corresponding materialized view should be the following:
 
 ### WITHOUT LIGHTWEIGHT TRANSACTIONS
 
-As we said before, if we don't leverage the **ligthweight transaction** feature of the batch update we need to introduce ad **additional column** in the event record, i.e. the `marker`. This column is needed to check whether the batch statement has been actually applied or not.
+As we said before, if we don't leverage the **lightweight transaction** feature of the batch update we need to introduce ad **additional column** in the event record, i.e. the `marker`. This column is needed to check whether the batch statement has been actually applied or not.
 
 #### FIRST EVENT
 
