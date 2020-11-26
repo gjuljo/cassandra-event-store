@@ -113,13 +113,12 @@ func (es *CassandraEventStore) updateCAS(guid string, expectedVersion int, event
 
 func (es *CassandraEventStore) updateNoCAS(guid string, expectedVersion int, events []Event, mapper EventToEventTypeMapper) error {
 	batch := es.session.NewBatch(gocql.UnloggedBatch)
-	quorum := es.writeQuorum
 	numbEvents := len(events)
 	newVersion := expectedVersion + numbEvents
 	marker := gocql.TimeUUID()
 	finalVersion := 0
 
-	batch.SetConsistency(quorum)
+	batch.SetConsistency(es.writeQuorum)
 	if expectedVersion == 0 {
 		batch.Query("INSERT INTO events (id, current_version) VALUES (?,?) IF NOT EXISTS", guid, numbEvents)
 	} else {
@@ -156,7 +155,7 @@ func (es *CassandraEventStore) updateNoCAS(guid string, expectedVersion int, eve
 
 	// check whether marker for the latest event we think we have written
 	var checkMarker gocql.UUID
-	if err := es.session.Query("SELECT marker FROM events WHERE id = ? AND version = ?", guid, finalVersion).Consistency(quorum).Scan(&checkMarker); err != nil {
+	if err := es.session.Query("SELECT marker FROM events WHERE id = ? AND version = ?", guid, finalVersion).Consistency(es.readQuorum).Scan(&checkMarker); err != nil {
 		return fmt.Errorf("ERROR: %+v", err)
 	}
 
