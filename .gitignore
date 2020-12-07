@@ -4,3 +4,5 @@
 esexample
 esexample.exe
 /.vscode/
+/storegrpc/*
+.idea

@@ -16,7 +16,7 @@ func TestPatientInStore(t *testing.T) {
 		t.Errorf("got expected error: %+v", err)
 	}
 
-	pfind, err := pstore.Find("uuid")
+	pfind, err := pstore.Find(store.EventID("uuid"))
 
 	if err != nil {
 		t.Errorf("got expected error: %+v", err)
@@ -36,7 +36,7 @@ func TestPatientInStore(t *testing.T) {
 		t.Errorf("got expected error: %+v", err)
 	}
 
-	pfind, err = pstore.Find("uuid")
+	pfind, err = pstore.Find(store.EventID("uuid"))
 
 	if err != nil {
 		t.Errorf("got expected error: %+v", err)
@@ -57,7 +57,7 @@ func TestPatientInStore(t *testing.T) {
 		t.Errorf("got expected error: %+v", err)
 	}
 
-	pfind, err = pstore.Find("uuid")
+	pfind, err = pstore.Find(store.EventID("uuid"))
 
 	if err != nil {
 		t.Errorf("got expected error: %+v", err)
@@ -78,7 +78,7 @@ func TestPatientInStore(t *testing.T) {
 		t.Errorf("got expected error: %+v", err)
 	}
 
-	pfind, err = pstore.Find("uuid")
+	pfind, err = pstore.Find(store.EventID("uuid"))
 
 	if err != nil {
 		t.Errorf("got expected error: %+v", err)
@@ -97,7 +97,7 @@ func TestOptimisticLockingInStore(t *testing.T) {
 		t.Errorf("got expected error: %+v", err)
 	}
 
-	pfind, err := pstore.Find("uuid")
+	pfind, err := pstore.Find(store.EventID("uuid"))
 
 	if err != nil {
 		t.Errorf("got expected error: %+v", err)

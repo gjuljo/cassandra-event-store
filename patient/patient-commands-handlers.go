@@ -1,5 +1,7 @@
 package patient
 
+import "my/esexample/store"
+
 type PatientCommandHandler struct {
 	store *patientEventStore
 }
@@ -14,7 +16,7 @@ func (h *PatientCommandHandler) HandleAdmitPatient(c *AdmitPatient) error {
 }
 
 func (h *PatientCommandHandler) HandleTransferPatient(c *TransferPatient) error {
-	p, err := h.store.Find(c.ID)
+	p, err := h.store.Find(store.EventID(c.ID))
 
 	if err != nil {
 		return err
@@ -30,7 +32,7 @@ func (h *PatientCommandHandler) HandleTransferPatient(c *TransferPatient) error 
 }
 
 func (h *PatientCommandHandler) HandleDischargePatient(c *DischargePatient) error {
-	p, err := h.store.Find(c.ID)
+	p, err := h.store.Find(store.EventID(c.ID))
 
 	if err != nil {
 		return err

@@ -3,11 +3,12 @@ module my/esexample
 go 1.15
 
 require (
-	github.com/gocql/gocql v0.0.0-20201024154641-5913df4d474e
+	github.com/gin-gonic/gin v1.6.3
+	github.com/gocql/gocql v0.0.0-20201204142955-93eedddb6466
+	github.com/golang/protobuf v1.4.3
 	github.com/google/uuid v1.1.2
-	github.com/kelseyhightower/envconfig v1.4.0 // indirect
-	github.com/matoous/go-nanoid v1.5.0
-	github.com/pkg/errors v0.9.1
-	github.com/stretchr/testify v1.6.1
-	github.com/vippsas/go-cosmosdb v0.0.0-20200428065936-29dab535353d
+	github.com/rs/zerolog v1.20.0
+	github.com/stretchr/testify v1.5.1
+	google.golang.org/grpc v1.34.0
+	google.golang.org/protobuf v1.25.0
 )

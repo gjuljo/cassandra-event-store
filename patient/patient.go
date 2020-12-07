@@ -67,7 +67,7 @@ func New(id string, name Name, age Age, ward WardNumber) *Patient {
 	p := &Patient{}
 
 	p.raise(&PatientAdmitted{
-		ID:   id,
+		ID:   store.EventID(id),
 		Name: name,
 		Age:  age,
 		Ward: ward,
@@ -83,7 +83,7 @@ func (p *Patient) Transfer(newWard WardNumber) error {
 	}
 
 	p.raise(&PatientTransferred{
-		ID:            p.id,
+		ID:            store.EventID(p.id),
 		NewWardNumber: newWard,
 	})
 
@@ -97,7 +97,7 @@ func (p *Patient) Discharge() error {
 	}
 
 	p.raise(&PatientDischarged{
-		ID: p.id,
+		ID: store.EventID(p.id),
 	})
 
 	return nil
@@ -107,7 +107,7 @@ func (p *Patient) Discharge() error {
 func (p *Patient) On(event store.Event, new bool) {
 	switch e := event.(type) {
 	case *PatientAdmitted:
-		p.id = e.ID
+		p.id = string(e.ID)
 		p.name = e.Name
 		p.age = e.Age
 		p.ward = e.Ward

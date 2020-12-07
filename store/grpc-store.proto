@@ -1,0 +1,52 @@
+syntax = "proto3";
+package storegrpc;
+
+option go_package = "/storegrpc";
+
+service EventStoreService {   
+  rpc FindByID(FindByIDRequest) returns (FindResponse) {}
+  rpc FindByType(FindByTypeRequest) returns (FindResponse) {} 
+  rpc Update(UpdateRequest) returns (UpdateResponse) {}
+}
+
+message UpdateRequest {
+  string id = 1;
+  int32 version = 2;
+
+  message Event {
+    int32 type = 1;
+    string payload = 2;
+  }
+
+  repeated Event events = 3;
+}
+
+message UpdateResponse {
+  bool success = 1;
+  string error = 2;
+}
+
+message FindByIDRequest {
+  string id = 1;
+}
+
+message FindByTypeRequest {
+  int32 type = 1;
+  int64 since = 2;
+  int32 batchSize = 3;
+}
+
+message FindResponse {
+  bool success = 1;
+  string error = 2;
+
+  message Event {
+    string id = 1;
+    int32 type = 2;
+    string payload = 3;
+    int64 savetime = 4;
+  }
+
+  int64 latest = 3;
+  repeated Event events = 4;
+}

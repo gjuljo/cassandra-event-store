@@ -1,9 +1,11 @@
 package store
 
 import (
-	"encoding/json"
 	"fmt"
 	"strings"
+
+	"github.com/rs/zerolog"
+	"github.com/rs/zerolog/log"
 
 	"github.com/gocql/gocql"
 )
@@ -13,10 +15,12 @@ type CassandraEventStoreConfig struct {
 	WriteQuorum string
 	ReadQuorum  string
 	Hosts       []string
+	Port        int
 	Auth        struct {
 		Username string
 		Password string
 	}
+	TraceSession bool
 }
 
 type CassandraEventStore struct {
@@ -27,73 +31,47 @@ type CassandraEventStore struct {
 }
 
 // @see EventStore.Find
-func (es *CassandraEventStore) Find(guid string, mapper EventTypeToEventMapper) ([]Event, error) {
-	var events []Event
-	var jevent string
-	var etype EventType
+func (es *CassandraEventStore) Find(guid EventID) ([]StoreEvent, error) {
+	var events []StoreEvent
+	var event string
+	var etype int
+
+	// ATTENTION: we need to parse the guid into the atual type we use in the table
+	stringGuid := string(guid)
 
 	iter := es.session.
-		Query(`SELECT type, payload FROM events WHERE id = ?`, guid).
+		Query(`SELECT type, payload FROM events WHERE id = ?`, stringGuid).
 		Consistency(es.readQuorum).
 		Iter()
 
-	for iter.Scan(&etype, &jevent) {
-		event, err := mapper(etype) // TODO: handle error
-
-		// unknown event type
-		if err != nil {
-			return nil, err
-		}
-
-		err = json.Unmarshal([]byte(jevent), &event)
-
-		// unable to unmarshal the events
-		if err != nil {
-			return nil, err
-		}
-
-		events = append(events, event)
+	for iter.Scan(&etype, &event) {
+		events = append(events, StoreEvent{ID: EventID(guid), Type: EventType(etype), Payload: EventPayload(event)})
 	}
 
 	return events, nil
 }
 
-func (es *CassandraEventStore) Update(guid string, expectedVersion int, events []Event, mapper EventToEventTypeMapper) error {
-	return es.updateNoCAS(guid, expectedVersion, events, mapper)
-}
-
-func (es *CassandraEventStore) updateCAS(guid string, expectedVersion int, events []Event, mapper EventToEventTypeMapper) error {
+func (es *CassandraEventStore) Update(guid EventID, expectedVersion int, events []StoreEvent) error {
 	batch := es.session.NewBatch(gocql.UnloggedBatch)
 	quorum := es.writeQuorum
 	numbEvents := len(events)
 	newVersion := expectedVersion + numbEvents
 
+	// ATTENTION: we need to parse the guid into the actual type we use in the table
+	stringGuid := string(guid)
+
 	batch.SetConsistency(quorum)
 	if expectedVersion == 0 {
-		batch.Query("INSERT INTO events (id, current_version) VALUES (?,?) IF NOT EXISTS", guid, numbEvents)
+		batch.Query("INSERT INTO events (id, current_version) VALUES (?,?) IF NOT EXISTS", stringGuid, numbEvents)
 	} else {
-		batch.Query("UPDATE events SET current_version = ? WHERE id = ? IF current_version = ?", newVersion, guid, expectedVersion)
+		batch.Query("UPDATE events SET current_version = ? WHERE id = ? IF current_version = ?", newVersion, stringGuid, expectedVersion)
 	}
 
 	stmt := "INSERT INTO events (id, version, type, payload, savetime) VALUES (?,?,?,?,toTimeStamp(now()))"
 
 	for i, event := range events {
-		etype, err := mapper(event)
-
-		// error, uknown event type
-		if err != nil {
-			return err
-		}
-
-		jevent, err := json.Marshal(event)
-
-		// error, unable to marshal json
-		if err != nil {
-			return fmt.Errorf("CQL ERROR: %+v", err)
-		}
-
 		eventVersion := expectedVersion + 1 + i
-		batch.Query(stmt, guid, eventVersion, etype, jevent)
+		batch.Query(stmt, stringGuid, eventVersion, event.Type, event.Payload)
 	}
 
 	// here we can get an error only if we are unable to run the query or it is invalid
@@ -111,64 +89,9 @@ func (es *CassandraEventStore) updateCAS(guid string, expectedVersion int, event
 	return nil
 }
 
-func (es *CassandraEventStore) updateNoCAS(guid string, expectedVersion int, events []Event, mapper EventToEventTypeMapper) error {
-	batch := es.session.NewBatch(gocql.UnloggedBatch)
-	numbEvents := len(events)
-	newVersion := expectedVersion + numbEvents
-	marker := gocql.TimeUUID()
-	finalVersion := 0
-
-	batch.SetConsistency(es.writeQuorum)
-	if expectedVersion == 0 {
-		batch.Query("INSERT INTO events (id, current_version) VALUES (?,?) IF NOT EXISTS", guid, numbEvents)
-	} else {
-		batch.Query("UPDATE events SET current_version = ? WHERE id = ? IF current_version = ?", newVersion, guid, expectedVersion)
-	}
-
-	stmt := "INSERT INTO events (id, version, type, payload, marker, savetime) VALUES (?,?,?,?,?,toTimeStamp(now()))"
-
-	for i, event := range events {
-		etype, err := mapper(event)
-
-		// error, uknown event type
-		if err != nil {
-			return err
-		}
-
-		jevent, err := json.Marshal(event)
-
-		// error, unable to marshal json
-		if err != nil {
-			return fmt.Errorf("CQL ERROR: %+v", err)
-		}
-
-		finalVersion = expectedVersion + 1 + i
-		batch.Query(stmt, guid, finalVersion, etype, jevent, marker)
-	}
-
-	// here we can get an error only if we are unable to run the query or it is invalid
-	err := es.session.ExecuteBatch(batch)
-
-	if err != nil {
-		return fmt.Errorf("CQL ERROR: %+v", err)
-	}
-
-	// check whether marker for the latest event we think we have written
-	var checkMarker gocql.UUID
-	if err := es.session.Query("SELECT marker FROM events WHERE id = ? AND version = ?", guid, finalVersion).Consistency(es.readQuorum).Scan(&checkMarker); err != nil {
-		return fmt.Errorf("ERROR: %+v", err)
-	}
-
-	if checkMarker != marker {
-		return fmt.Errorf("%+v", "optimistic locking failed")
-	}
-
-	return nil
-}
-
-func (es *CassandraEventStore) GetEventsByType(etype EventType, sinceMillis int64, batchSize int, mapper EventTypeToEventMapper) (events []Event, latest int64, theError error) {
-	var jevent string
-	var event Event
+func (es *CassandraEventStore) GetEventsByType(etype EventType, sinceMillis int64, batchSize int) (events []StoreEvent, latest int64, theError error) {
+	var payload string
+	var id string
 	var query *gocql.Query
 
 	if batchSize <= 0 {
@@ -176,29 +99,15 @@ func (es *CassandraEventStore) GetEventsByType(etype EventType, sinceMillis int6
 	}
 
 	if sinceMillis > 0 {
-		query = es.session.Query(`SELECT savetime, payload FROM events_by_type WHERE type=? AND savetime > ? LIMIT ?`, etype, sinceMillis, batchSize)
+		query = es.session.Query(`SELECT savetime, payload, id FROM events_by_type WHERE type=? AND savetime > ? LIMIT ?`, etype, sinceMillis, batchSize)
 	} else {
-		query = es.session.Query(`SELECT savetime, payload FROM events_by_type WHERE type=? LIMIT ?`, etype, batchSize)
+		query = es.session.Query(`SELECT savetime, payload, id FROM events_by_type WHERE type=? LIMIT ?`, etype, batchSize)
 	}
 
 	iter := query.Consistency(es.readQuorum).Iter()
 
-	for iter.Scan(&latest, &jevent) {
-		event, theError = mapper(etype)
-
-		// block if uknown event type
-		if theError != nil {
-			return
-		}
-
-		theError = json.Unmarshal([]byte(jevent), &event)
-
-		// error, unable to unmarhal json
-		if theError != nil {
-			return
-		}
-
-		events = append(events, event)
+	for iter.Scan(&latest, &payload, &id) {
+		events = append(events, StoreEvent{ID: EventID(id), Type: etype, Payload: EventPayload(payload), TimeStamp: latest})
 	}
 
 	return events, latest, nil
@@ -209,8 +118,13 @@ func NewCassandraEventStore(config *CassandraEventStoreConfig) (*CassandraEventS
 
 	cluster := gocql.NewCluster(config.Hosts...)
 	cluster.Keyspace = config.Keyspace
-	cluster.Consistency = gocql.Quorum
 
+	// set port if provided
+	if config.Port > 0 {
+		cluster.Port = config.Port
+	}
+
+	cluster.Consistency = gocql.Quorum
 	// cluster.SerialConsistency = gocql.LocalSerial
 
 	var readQuorum gocql.Consistency
@@ -227,6 +141,11 @@ func NewCassandraEventStore(config *CassandraEventStoreConfig) (*CassandraEventS
 
 	if err != nil {
 		return nil, err
+	}
+
+	if config.TraceSession {
+		tracer := gocql.NewTraceWriter(session, log.With().Logger().Level(zerolog.InfoLevel))
+		session.SetTrace(tracer)
 	}
 
 	return &CassandraEventStore{session: session, config: config, readQuorum: readQuorum, writeQuorum: writeQuorum}, nil

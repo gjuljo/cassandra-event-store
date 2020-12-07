@@ -24,38 +24,25 @@ func PatientEventFromType(e store.EventType) (store.Event, error) {
 	return nil, fmt.Errorf("Event type not found %d", e)
 }
 
-func PatientEventTypeFromEvent(e store.Event) (store.EventType, error) {
-	switch e.(type) {
-	case *PatientAdmitted:
-		return PatientAdmittedEventType, nil
-	case *PatientTransferred:
-		return PatientTransferredEventType, nil
-	case *PatientDischarged:
-		return PatientDischargedEventType, nil
-	}
-
-	return -1, fmt.Errorf("Event type %+v not enumerated", e)
-}
-
-func (e PatientAdmitted) IsEvent()    {}
-func (e PatientTransferred) IsEvent() {}
-func (e PatientDischarged) IsEvent()  {}
+func (e PatientAdmitted) GetEventType() store.EventType    { return PatientAdmittedEventType }
+func (e PatientTransferred) GetEventType() store.EventType { return PatientTransferredEventType }
+func (e PatientDischarged) GetEventType() store.EventType  { return PatientDischargedEventType }
 
 // PatientAdmitted event.
 type PatientAdmitted struct {
-	ID   string     `json:"id"`
-	Name Name       `json:"name"`
-	Ward WardNumber `json:"ward"`
-	Age  Age        `json:"age"`
+	ID   store.EventID `json:"id"`
+	Name Name          `json:"name"`
+	Ward WardNumber    `json:"ward"`
+	Age  Age           `json:"age"`
 }
 
 // PatientTransferred event.
 type PatientTransferred struct {
-	ID            string     `json:"id"`
-	NewWardNumber WardNumber `json:"new_ward"`
+	ID            store.EventID `json:"id"`
+	NewWardNumber WardNumber    `json:"new_ward"`
 }
 
 // PatientDischarged event.
 type PatientDischarged struct {
-	ID string `json:"id"`
+	ID store.EventID `json:"id"`
 }
