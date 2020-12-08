@@ -14,19 +14,19 @@ According to the topology of the Cassandra cluster, you might need to create the
 - single node in single datacenter
 
 ```
-CREATE KEYSPACE eventstore WITH REPLICATION = {'class': 'SimpleStrategy', 'replication_factor': 1};
+CREATE KEYSPACE IF NOT EXISTS eventstore WITH REPLICATION = {'class': 'SimpleStrategy', 'replication_factor': 1};
 ```
 
 - multiple nodes in single datacenter
 
 ```
-CREATE KEYSPACE eventstore WITH REPLICATION = {'class': 'SimpleStrategy', 'replication_factor': 3};
+CREATE KEYSPACE IF NOT EXISTS eventstore WITH REPLICATION = {'class': 'SimpleStrategy', 'replication_factor': 3};
 ```
 
 - multiple nodes in multiple datacenters
 
 ```
-CREATE KEYSPACE eventstore WITH REPLICATION = {'class':'NetworkTopologyStrategy','DC1':3,'DC2':3,'DC3':3};
+CREATE KEYSPACE IF NOT EXISTS eventstore WITH REPLICATION = {'class':'NetworkTopologyStrategy','DC1':3,'DC2':3,'DC3':3};
 ```
 
 --------------------------------------------------------------------------------------------------------------------------------
@@ -63,7 +63,7 @@ CREATE TABLE IF NOT EXISTS eventstore.events (
 This materialized view is meant to gather all the events of the same type in the same partition, to let queries such as "events by type". It enables processes that need to react whether a given type of event occurred.
 
 ```
-CREATE MATERIALIZED VIEW eventstore.events_by_type AS
+CREATE MATERIALIZED VIEW IF NOT EXISTS eventstore.events_by_type AS
   SELECT id, version, type, payload, savetime FROM eventstore.events WHERE type IS NOT NULL AND version IS NOT NULL AND savetime IS NOT NULL
 PRIMARY KEY (type, savetime, version, id);
 ```
@@ -98,7 +98,7 @@ If the batch is successfully applied, the table is supposed to contain the follo
 #### *events* table
 
 | id (P) | version (C) | savetime (C) | current_version (S) | payload | type |
-|--------|------------:|--------------|--------------------:|--------:|-----:| 
+|--------|------------:|--------------|--------------------:|--------:|-----:|
 |fade87a1-9df9-46bb-aae6-63b2b763094d | 1 | 2020-11-24 18:21:49.826000+0000 | 1 | 'aaa' | 11 |
 
 Correspondingly, the materialized view is supposed to have the following contents:
@@ -106,7 +106,7 @@ Correspondingly, the materialized view is supposed to have the following content
 #### *events_by_type* view
 
 | type (P) | savetype (C) | version (C) | id | payload |
-|----------|--------------|------------:|----|--------:| 
+|----------|--------------|------------:|----|--------:|
 |11| 2020-11-24 18:21:49.826000+0000 | 1 | fade87a1-9df9-46bb-aae6-63b2b763094d|'aaa'|
 
 ### FURTHER EVENTS
@@ -160,11 +160,105 @@ DROP TABLE eventstore.events;
 DROP MATERIALIZED VIEW eventstore.events_by_type;
 ```
 
-## PROTOCOL BUFFER GENERATION
+--------------------------------------------------------------------------------------------------------------------------------
 
-```
-protoc --go_out=. --go-grpc_out=. store\grpc-store.proto
-```
+## RUNNING LOCALLY (Windows example)
+In this scenario you run Cassandra in Docker, while both **gRPC** client and server run on you local workstation. You are supposed to have already installed [Go](https://golang.org/) and [Protocol Buffer Compiler](https://grpc.io/docs/protoc-installation/).
+
+1. START CASSANDRA
+
+    ```
+    docker-compose up -d cassandra
+    ```
+
+    optionally you can start a **cqlsh** session to query the database as needed:
+
+    ```bash
+    docker-compose exec cassandra cqlsh
+    ```
+
+2. CRATE KEYSPACE AND TABLES
+
+    ```
+    docker-compose up gentables
+    ```
+
+3. GERENRATE PROTOBUFFER
+
+    ```
+    protoc --go_out=esexample --go-grpc_out=esexample esexample\store\grpc-store.proto
+    ```
+
+4. BUILD AND START THE SERVER
+
+    ```
+    cd esexample\cmd\grpc-store
+    go build && grpc-store.exe
+    ```
+
+5. BUILD AND START THE CLIENT
+
+    ```
+    cd esexample\cmd\test-client
+    go build && test-client.exe
+    ```
+
+--------------------------------------------------------------------------------------------------------------------------------
+
+## TRAFFIC MIRRORING WITH ENVOY
+
+In this example we see how to mirror the gRPC traffic from client to the server using **Envoy** in between. Anything sent to the server is also sent to a *sink* server that only logs the traffic.
+
+1. START CASSANDRA
+
+    ```
+    docker-compose up -d cassandra
+    ```
+
+    optionally you can start a **cqlsh** session to query the database as needed:
+
+    ```bash
+    docker-compose exec cassandra cqlsh
+    ```
+
+2. CRATE KEYSPACE AND TABLES
+
+    ```
+    docker-compose up gentables
+    ```
+
+3. START ENVOY, STORE AND SINK SERVICES
+
+    ```
+    docker-compose up grpc-store grpc-sink envoy
+    ```
+
+4. BUILD AND START THE CLIENT
+
+    ```
+    cd esexample\cmd\test-client
+    go build && test-client.exe
+    ```
+
+--------------------------------------------------------------------------------------------------------------------------------
+
+## MANUALLY GENERATE THE DOCKER IMAGES
+
+The **docker-compose** file generates all the Docker images, but you can manually build them if needed:
+
+* gRPC STORE SERVER
+
+    ```bash
+    docker build -t esexample/grpc-store -f Dockerfile.grpcstore .
+    ```
+
+* gRPC SINK SERVER
+
+    ```bash
+    docker build -t esexample/grpc-sink -f Dockerfile.grpcsink .
+    ```
+
+--------------------------------------------------------------------------------------------------------------------------------
 
 ## REFERENCES
 
@@ -173,3 +267,5 @@ protoc --go_out=. --go-grpc_out=. store\grpc-store.proto
 - [Event Sourcing in Go - Victor Martínez](https://victoramartinez.com/posts/event-sourcing-in-go/)
 - [Building Microservices with Event Sourcing/CQRS in Go using gRPC, NATS Streaming and CockroachDB - Shiju Varghese](https://shijuvar.medium.com/building-microservices-with-event-sourcing-cqrs-in-go-using-grpc-nats-streaming-and-cockroachdb-983f650452aa)
 - [Simple CQRS Implementation in C# - Gergory Young](https://github.com/gregoryyoung/m-r/tree/master/SimpleCQRS)
+- [Shadow Traffic with Envoy](https://pankaj-takawale.medium.com/shadow-traffic-with-envoy-952c924f1eba)
+- [gRPC Quick Start](https://grpc.io/docs/platforms/web/quickstart/)

@@ -1,0 +1,60 @@
+version: '3'
+services:
+   grpc-store:
+      image: esexample/grpc-store:latest
+      build:
+         context: .
+         dockerfile: Dockerfile.grpcstore   
+      environment:
+         CASSANDRA_HOSTS: "cassandra"
+      ports:
+      - "8091:8080"   # not needed, for debugging purpose only
+      networks:
+         esexample-nw:
+      depends_on:
+      - cassandra
+   grpc-sink:
+      image: esexample/grpc-sink:latest
+      build:
+         context: .
+         dockerfile: Dockerfile.grpcsink
+      ports:
+      - "8092:8080"   # not needed, for debugging purpose only
+      networks:
+         esexample-nw:
+   cassandra:
+      image: cassandra:3.11
+      environment:
+         CASSANDRA_ADMIN_PASSWORD: cassandra
+         CASSANDRA_USER: cassandra
+         CASSANDRA_PASSWORD: cassandra
+      ports:
+      - "9042:9042"
+      - "9160:9160"
+      networks:
+         esexample-nw:
+   gentables:  # this service should just create the tables and stop
+      image: cassandra:3.11
+      command: ["cqlsh","-u","cassandra","-p","cassandra","cassandra","9042","-f","/tmp/cqlsh/createall.cql"]
+      volumes:
+      - ./cqlsh:/tmp/cqlsh
+      networks:
+         esexample-nw:
+      depends_on:
+      - cassandra
+      restart: "no"
+   envoy:
+      image: envoyproxy/envoy:v1.16.1
+      command: ["-c","/opt/envoy/envoy.yaml","-l","trace","--log-path","/opt/envoy/envoy_info.log"]
+      volumes:
+      - ./envoy:/opt/envoy
+      ports:
+      - "8080:8080"
+      - "9901:9901"
+      networks:
+         esexample-nw:
+      depends_on:
+      - grpc-sink
+      - grpc-store
+networks:
+    esexample-nw:

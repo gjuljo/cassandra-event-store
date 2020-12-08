@@ -1,8 +1,11 @@
+/.vscode/
+/.idea
 .*.swp
 /bin/
 *.exe
-esexample
-esexample.exe
-/.vscode/
-/storegrpc/*
-.idea
+test-client
+grpc-sink
+grpc-store
+http-store
+/esexample/storegrpc/*
+/envoy/*.log
