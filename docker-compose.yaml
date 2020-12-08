@@ -22,6 +22,17 @@ services:
       - "8092:8080"   # not needed, for debugging purpose only
       networks:
          esexample-nw:
+   poll-client:
+      image: esexample/poll-client:latest
+      build:
+         context: .
+         dockerfile: Dockerfile.pollclient
+      environment:
+         STORE_HOST: "grpc-store"
+      networks:
+         esexample-nw:
+      depends_on:
+      - grpc-store
    cassandra:
       image: cassandra:3.11
       environment:

@@ -196,7 +196,14 @@ In this scenario you run Cassandra in Docker, while both **gRPC** client and ser
     go build && grpc-store.exe
     ```
 
-5. BUILD AND START THE CLIENT
+5. BUILD AND START THE POLLING CLIENT
+
+    ```
+    cd esexample\cmd\polling-client
+    go build && polling-client.exe
+    ```
+
+6. BUILD AND START THE CLIENT
 
     ```
     cd esexample\cmd\test-client
@@ -227,10 +234,10 @@ In this example we see how to mirror the gRPC traffic from client to the server 
     docker-compose up gentables
     ```
 
-3. START ENVOY, STORE AND SINK SERVICES
+3. START POLLING CLIENT, ENVOY, STORE AND SINK SERVICES
 
     ```
-    docker-compose up grpc-store grpc-sink envoy
+    docker-compose up grpc-store grpc-sink envoy poll-client
     ```
 
 4. BUILD AND START THE CLIENT
@@ -256,6 +263,12 @@ The **docker-compose** file generates all the Docker images, but you can manuall
 
     ```bash
     docker build -t esexample/grpc-sink -f Dockerfile.grpcsink .
+    ```
+
+* gRPC POLLING CLIENT
+
+    ```bash
+    docker build -t esexample/poll-client -f Dockerfile.pollclient .
     ```
 
 --------------------------------------------------------------------------------------------------------------------------------
