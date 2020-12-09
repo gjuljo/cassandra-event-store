@@ -275,7 +275,7 @@ The **docker-compose** file generates all the Docker images, but you can manuall
 
 ## REFERENCES
 
-- [An Introduction to CQRS and Event Sourcing Patterns - Mathew McLoughlin]([https://www.youtube.com/watch?v=9a1PqwFrMP0])
+- [An Introduction to CQRS and Event Sourcing Patterns - Mathew McLoughlin](https://www.youtube.com/watch?v=9a1PqwFrMP0)
 - [PatientMangement project on GitHub - Mathew McLoughlin](https://github.com/mat-mcloughlin/PatientMangement)
 - [Event Sourcing in Go - Victor Martínez](https://victoramartinez.com/posts/event-sourcing-in-go/)
 - [Building Microservices with Event Sourcing/CQRS in Go using gRPC, NATS Streaming and CockroachDB - Shiju Varghese](https://shijuvar.medium.com/building-microservices-with-event-sourcing-cqrs-in-go-using-grpc-nats-streaming-and-cockroachdb-983f650452aa)
