@@ -3,9 +3,5 @@
 .*.swp
 /bin/
 *.exe
-test-client
-grpc-sink
-grpc-store
-http-store
 /esexample/storegrpc/*
 /envoy/*.log
